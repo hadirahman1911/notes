@@ -3,19 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Milanote Clone - Final Ultimate</title>
+    <title>Notes - Final Ultimate</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <script async src="https://www.instagram.com/embed.js"></script>
-    <script async src="https://www.threads.net/embed.js"></script>
     <style>
-        .menu-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
-        .menu-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .menu-scroll:hover::-webkit-scrollbar-thumb { background: #94a3b8; }
+        .menu-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .menu-scroll::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; }
+        .menu-scroll:hover::-webkit-scrollbar-thumb { background: #64748b; }
     </style>
 </head>
 <body class="bg-gray-100 overflow-hidden touch-none">
@@ -31,12 +29,10 @@
             appId: "1:480733039726:web:9b051f3b15cf735aac6a7f"
         };
 
-        // 🌟 GATEKEEPER: Check status login dalam localStorage
+        // 🌟 GATEKEEPER
         const authStatus = localStorage.getItem('isLoggedIn');
-
         if (authStatus !== 'true') {
-            // Kalau takde status 'true', terus tendang ke login
-            window.location.href = "login.html";
+             window.location.href = "login.html";
         }
 
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
@@ -47,11 +43,13 @@
         function App() {
             const [notes, setNotes] = useState([]);
             const [menuPos, setMenuPos] = useState('left');
+            const [searchQuery, setSearchQuery] = useState(''); 
+            
             const [pan, setPan] = useState({ x: 0, y: 0 });
             const [zoom, setZoom] = useState(1);
             const isPanning = useRef(false);
             const panStart = useRef({ x: 0, y: 0 });
-            const pointers = useRef(new Map()); // Ganti activeFingers
+            const pointers = useRef(new Map()); 
             const pinchState = useRef({ dist: 0, zoom: 1, cx: 0, cy: 0, panX: 0, panY: 0 });
 
             useEffect(() => {
@@ -67,7 +65,13 @@
                 const newId = Date.now().toString();
                 const newItemX = (window.innerWidth / 2 - pan.x) / zoom - 150;
                 const newItemY = (window.innerHeight / 2 - pan.y) / zoom - 100;
-                db.collection("notes").doc(newId).set({ id: newId, type, text: "", url: "", imageUrl: "", x: newItemX, y: newItemY });
+                
+                let newNote = { id: newId, type, text: "", url: "", imageUrl: "", x: newItemX, y: newItemY };
+                if (type === 'todo') {
+                    newNote.tasks = [{ text: '', done: false }]; 
+                }
+                
+                db.collection("notes").doc(newId).set(newNote);
             };
 
             return (
@@ -82,7 +86,6 @@
                                 panStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
                             }
                         } else if (pointers.current.size === 2) {
-                            // 🌟 FASA MULA CUBIT (PINCH)
                             isPanning.current = false;
                             const pts = Array.from(pointers.current.values());
                             const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
@@ -96,7 +99,6 @@
                         pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
                         if (pointers.current.size === 2) {
-                            // 🌟 FASA MENGEMBANG/MENGUNCUP (ZOOMING)
                             const pts = Array.from(pointers.current.values());
                             const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
                             const cx = (pts[0].x + pts[1].x) / 2;
@@ -106,7 +108,6 @@
                             const newZ = Math.min(Math.max(0.2, pinchState.current.zoom * scale), 3);
 
                             setZoom(newZ);
-                            // Logik untuk pastikan zoom berpusat kat celah jari kau
                             setPan({
                                 x: cx - (pinchState.current.cx - pinchState.current.panX) * (newZ / pinchState.current.zoom),
                                 y: cy - (pinchState.current.cy - pinchState.current.panY) * (newZ / pinchState.current.zoom)
@@ -118,7 +119,6 @@
                     onPointerUp={(e) => {
                         pointers.current.delete(e.pointerId);
                         if (pointers.current.size === 1) {
-                            // 🌟 FIX: Kalau angkat satu jari, jangan bagi canvas melompat
                             const [remainingPointer] = pointers.current.values();
                             panStart.current = { x: remainingPointer.x - pan.x, y: remainingPointer.y - pan.y };
                         } else if (pointers.current.size === 0) {
@@ -144,16 +144,37 @@
                     }}
                     onContextMenu={(e) => e.preventDefault()}
                 >
+                    <div className="fixed top-4 right-4 z-[100]" onPointerDown={e => e.stopPropagation()}>
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+                            <input 
+                                type="text" 
+                                placeholder="Cari nota, task..." 
+                                className="p-2 pl-9 rounded-full shadow-lg border border-gray-200 outline-none focus:border-blue-400 bg-white w-48 focus:w-64 transition-all text-sm font-medium"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
                     <div className={`fixed z-[100] flex gap-3 bg-white p-3 rounded-xl shadow-lg border border-gray-200 transition-all duration-300 menu-scroll ${menuPos === 'left' ? 'flex-col left-4 top-1/2 -translate-y-1/2 max-h-[80vh] overflow-y-auto' : 'flex-row bottom-6 left-1/2 -translate-x-1/2 max-w-[90vw] overflow-x-auto'} cursor-default`} onPointerDown={e => e.stopPropagation()}>
                         <button onClick={() => setMenuPos(p => p === 'left' ? 'top' : 'left')} className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition text-xl">🔄</button>
                         <div className={menuPos === 'left' ? 'w-full h-px bg-gray-200 my-1' : 'w-px h-full bg-gray-200 mx-1'}></div>
                         <button onClick={() => addItem('text')} className="w-12 h-12 shrink-0 bg-yellow-100 rounded-lg shadow-sm hover:scale-110 transition text-xl">📝</button>
                         <button onClick={() => addItem('link')} className="w-12 h-12 shrink-0 bg-blue-100 rounded-lg shadow-sm hover:scale-110 transition text-xl">🔗</button>
+                        <button onClick={() => addItem('todo')} className="w-12 h-12 shrink-0 bg-green-100 rounded-lg shadow-sm hover:scale-110 transition text-xl">✅</button>
                         <div className="flex items-center shrink-0 bg-gray-50 rounded-lg p-1 text-[10px] font-bold justify-center">{Math.round(zoom * 100)}%</div>
                     </div>
 
                     <div id="canvas-bg" className="w-[10000px] h-[10000px] absolute origin-top-left" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, backgroundImage: 'radial-gradient(#cbd5e1 2px, transparent 2px)', backgroundSize: '40px 40px' }}>
-                        {notes.map(note => <DraggableItem key={note.id} note={note} pan={pan} zoom={zoom} />)}
+                        {notes.filter(note => {
+                            if (!searchQuery) return true;
+                            const q = searchQuery.toLowerCase();
+                            const matchText = note.text && note.text.toLowerCase().includes(q);
+                            const matchUrl = note.url && note.url.toLowerCase().includes(q);
+                            const matchTasks = note.tasks && note.tasks.some(tsk => tsk.text.toLowerCase().includes(q));
+                            return matchText || matchUrl || matchTasks;
+                        }).map(note => <DraggableItem key={note.id} note={note} pan={pan} zoom={zoom} />)}
                     </div>
                 </div>
             );
@@ -165,29 +186,6 @@
             const [isDragging, setIsDragging] = useState(false);
             const dragOffset = useRef({ x: 0, y: 0 });
 
-            // KEJUTKAN SKRIP META
-            useEffect(() => {
-                if (note.imageUrl === 'threads-embed' || note.imageUrl === 'instagram-embed') {
-                    const kejutkanMeta = () => {
-                        if (window.instgrm && window.instgrm.Embeds) {
-                            window.instgrm.Embeds.process();
-                        }
-                        const oldScript = document.getElementById('meta-embed-script');
-                        if (oldScript) oldScript.remove();
-
-                        const newScript = document.createElement('script');
-                        newScript.id = 'meta-embed-script';
-                        newScript.src = "https://www.threads.net/embed.js";
-                        newScript.async = true;
-                        document.body.appendChild(newScript);
-                    };
-
-                    kejutkanMeta();
-                    const timer = setTimeout(kejutkanMeta, 1000); 
-                    return () => clearTimeout(timer);
-                }
-            }, [note.imageUrl, note.url]);
-
             useEffect(() => {
                 if (!isDragging) return;
                 const handleGlobalMove = (e) => setPosition({ x: (e.clientX - pan.x) / zoom - dragOffset.current.x, y: (e.clientY - pan.y) / zoom - dragOffset.current.y });
@@ -197,99 +195,109 @@
                 return () => { window.removeEventListener('pointermove', handleGlobalMove); window.removeEventListener('pointerup', handleGlobalUp); };
             }, [isDragging, zoom, pan, position]);
 
-            // MESIN BASUH URL
             const handleUrlSave = async (e) => {
-                            let newUrl = e.target.value.trim();
-                            if(!newUrl || newUrl === note.url) return;
+                let newUrl = e.target.value.trim();
+                if(!newUrl || newUrl === note.url) return;
 
-                            // 🌟 FIX WAJIB: Paksa tambah https:// kalau kau tertinggal
-                            if (!newUrl.startsWith('http')) {
-                                newUrl = 'https://' + newUrl;
-                            }
+                if (!newUrl.startsWith('http')) {
+                    newUrl = 'https://' + newUrl;
+                }
 
-                            // 🌟 BILIK 1: MESIN BASUH THREADS
-                            if (newUrl.includes('threads.net') || newUrl.includes('threads.com')) {
-                                let cleanThreads = newUrl.replace('threads.com', 'threads.net'); // Tukar .net
-                                cleanThreads = cleanThreads.split('?')[0]; // Buang sampah ?xmt
-                                cleanThreads = cleanThreads.replace(/\/+$/, ''); // Cukur palang '/' kat hujung
-                                
-                                db.collection("notes").doc(note.id).update({ 
-                                    url: cleanThreads, 
-                                    imageUrl: 'threads-embed' 
-                                });
-                                return;
-                            }
+                if (newUrl.includes('threads.net') || newUrl.includes('threads.com')) {
+                    let cleanThreads = newUrl.replace('threads.com', 'threads.net').split('?')[0].replace(/\/+$/, '');
+                    db.collection("notes").doc(note.id).update({ url: cleanThreads, imageUrl: 'threads-embed' });
+                    return;
+                }
 
-                            // 🌟 BILIK 2: MESIN BASUH INSTAGRAM
-                            if (newUrl.includes('instagram.com')) {
-                                let cleanIG = newUrl.split('?')[0]; // Buang sampah ?utm_source
-                                cleanIG = cleanIG.replace(/\/+$/, ''); // Cukur palang '/' kat hujung
-                                
-                                db.collection("notes").doc(note.id).update({ 
-                                    url: cleanIG, 
-                                    imageUrl: 'instagram-embed' 
-                                }); 
-                                return;
-                            }
+                if (newUrl.includes('instagram.com')) {
+                    let cleanIG = newUrl.split('?')[0].replace(/\/+$/, '');
+                    db.collection("notes").doc(note.id).update({ url: cleanIG, imageUrl: 'instagram-embed' }); 
+                    return;
+                }
 
-                            // 🌟 BILIK 3: DROPBOX
-                            if (newUrl.includes('dropbox.com')) {
-                                try {
-                                    let tUrl = new URL(newUrl);
-                                    const isPdf = tUrl.pathname.toLowerCase().endsWith('.pdf');
-                                    tUrl.hostname = isPdf ? 'www.dropbox.com' : 'dl.dropboxusercontent.com';
-                                    tUrl.searchParams.delete('dl'); tUrl.searchParams.set('raw', '1');
-                                    db.collection("notes").doc(note.id).update({ url: newUrl, imageUrl: tUrl.toString() });
-                                    return;
-                                } catch(err) {}
-                            }
+                if (newUrl.includes('dropbox.com')) {
+                    try {
+                        let tUrl = new URL(newUrl);
+                        const isPdf = tUrl.pathname.toLowerCase().endsWith('.pdf');
+                        tUrl.hostname = isPdf ? 'www.dropbox.com' : 'dl.dropboxusercontent.com';
+                        tUrl.searchParams.delete('dl'); tUrl.searchParams.set('raw', '1');
+                        db.collection("notes").doc(note.id).update({ url: newUrl, imageUrl: tUrl.toString() });
+                        return;
+                    } catch(err) {}
+                }
 
-                            // 🌟 BILIK 4: MICROLINK (Link biasa)
-                            try {
-                                const res = await fetch(`https://api.microlink.io?url=${encodeURIComponent(newUrl)}`);
-                                const data = await res.json();
-                                db.collection("notes").doc(note.id).update({ url: newUrl, imageUrl: data.data?.image?.url || "" });
-                            } catch(err) { 
-                                db.collection("notes").doc(note.id).update({ url: newUrl }); 
-                            }
-                        };
+                try {
+                    const res = await fetch(`https://api.microlink.io?url=${encodeURIComponent(newUrl)}`);
+                    const data = await res.json();
+                    db.collection("notes").doc(note.id).update({ url: newUrl, imageUrl: data.data?.image?.url || "" });
+                } catch(err) { db.collection("notes").doc(note.id).update({ url: newUrl }); }
+            };
 
-            // PENENTU KANDUNGAN
             const isPdf = note.imageUrl && note.imageUrl.toLowerCase().includes('.pdf');
-            const safeUrl = note.url || '';
-
-            // ACUAN SEBIJI MACAM KAU MINTA TADI (SNIPER MODE)
-            const threadsHtml = `<blockquote class="text-post-media" data-text-post-permalink="${safeUrl}" data-text-post-version="0" style="background:#FFF; border-width: 1px; border-style: solid; border-color: #00000026; border-radius: 16px; margin: 1px; width:calc(100% - 2px);"><a href="${safeUrl}" style="background:#FFFFFF; line-height:0; padding:0; text-align:center; text-decoration:none; width:100%; font-family: -apple-system, BlinkMacSystemFont, sans-serif;" target="_blank"><div style="padding: 40px; display: flex; flex-direction: column; align-items: center;"><div style="display:block; height:32px; width:32px; padding-bottom:20px;"><svg aria-label="Threads" height="32px" role="img" viewBox="0 0 192 192" width="32px" xmlns="http://www.w3.org/2000/svg"><path d="M141.537 88.9883C140.71 88.5919 139.87 88.2104 139.019 87.8451C137.537 60.5382 122.616 44.905 97.5619 44.745C97.4484 44.7443 97.3355 44.7443 97.222 44.7443C82.2364 44.7443 69.7731 51.1409 62.102 62.7807L75.881 72.2328C81.6116 63.5383 90.6052 61.6848 97.2286 61.6848C97.3051 61.6848 97.3819 61.6848 97.4576 61.6855C105.707 61.7381 111.932 64.1366 115.961 68.814C118.893 72.2193 120.854 76.925 121.825 82.8638C114.511 81.6207 106.601 81.2385 98.145 81.7233C74.3247 83.0954 59.0111 96.9879 60.0396 116.292C60.5615 126.084 65.4397 134.508 73.775 140.011C80.8224 144.663 89.899 146.938 99.3323 146.423C111.79 145.74 121.563 140.987 128.381 132.296C133.559 125.696 136.834 117.143 138.28 106.366C144.217 109.949 148.617 114.664 151.047 120.332C155.179 129.967 155.42 145.8 142.501 158.708C131.182 170.016 117.576 174.908 97.0135 175.059C74.2042 174.89 56.9538 167.575 45.7381 153.317C35.2355 139.966 29.8077 120.682 29.6052 96C29.8077 71.3178 35.2355 52.0336 45.7381 38.6827C56.9538 24.4249 74.2039 17.11 97.0132 16.9405C119.988 17.1113 137.539 24.4614 149.184 38.788C154.894 45.8136 159.199 54.6488 162.037 64.9503L178.184 60.6422C174.744 47.9622 169.331 37.0357 161.965 27.974C147.036 9.60668 125.202 0.195148 97.0695 0H96.9569C68.8816 0.19447 47.2921 9.6418 32.7883 28.0793C19.8819 44.4864 13.2244 67.3157 13.0007 95.9325L13 96L13.0007 96.0675C13.2244 124.684 19.8819 147.514 32.7883 163.921C47.2921 182.358 68.8816 191.806 96.9569 192H97.0695C122.03 191.827 139.624 185.292 154.118 170.811C173.081 151.866 172.51 128.119 166.26 113.541C161.776 103.087 153.227 94.5962 141.537 88.9883ZM98.4405 129.507C88.0005 130.095 77.1544 125.409 76.6196 115.372C76.2232 107.93 81.9158 99.626 99.0812 98.6368C101.047 98.5234 102.976 98.468 104.871 98.468C111.106 98.468 116.939 99.0737 122.242 100.233C120.264 124.935 108.662 128.946 98.4405 129.507Z"/></svg></div><div style="font-size: 15px; line-height: 21px; color: #000000; font-weight: 600;">View on Threads</div></div></a></blockquote>`;
-            const igHtml = `<blockquote class="instagram-media" data-instgrm-permalink="${safeUrl}" data-instgrm-version="14" style="background:#FFF; border:0; border-radius:3px; box-shadow:0 0 1px 0 rgba(0,0,0,0.5),0 1px 10px 0 rgba(0,0,0,0.15); margin: 1px; width:calc(100% - 2px);"><a href="${safeUrl}" style="background:#FFFFFF; line-height:0; padding:0; text-align:center; text-decoration:none; width:100%;" target="_blank"><div style="padding: 40px; color:#64748b;">Menarik Instagram...</div></a></blockquote>`;
 
             return (
                 <div className={`group absolute w-[350px] h-auto min-h-[100px] shadow-lg border rounded-xl bg-white flex flex-col hover:shadow-xl transition-shadow`}
                     style={{ left: position.x, top: position.y, zIndex: isDragging ? 100 : 10 }}>
                     
-                    {/* HANDLE GRAB */}
                     <div onPointerDown={(e) => { e.stopPropagation(); e.target.setPointerCapture(e.pointerId); setIsDragging(true); dragOffset.current = { x: (e.clientX - pan.x) / zoom - position.x, y: (e.clientY - pan.y) / zoom - position.y }; }} 
                         className="drag-handle h-8 w-full bg-black/5 cursor-grab active:cursor-grabbing rounded-t-xl flex items-center justify-center relative touch-none">
                         <div className="w-10 h-1.5 bg-black/70 rounded-full pointer-events-none"></div>
-                        <button onClick={() => { if(confirm("Buang?")) db.collection("notes").doc(note.id).delete(); }} className="absolute -right-2 -top-2 w-6 h-6 bg-red-500 text-white rounded-full font-bold text-xs shadow-md">✕</button>
+                        <button onClick={() => { if(confirm("Buang kotak ni?")) db.collection("notes").doc(note.id).delete(); }} className="absolute -right-2 -top-2 w-6 h-6 bg-red-500 text-white rounded-full font-bold text-xs shadow-md">✕</button>
                     </div>
 
-                    {/* KANDUNGAN NOTA */}
                     <div className="p-4 pt-1 h-auto">
                         {note.type === 'text' ? (
-                            <textarea className="w-full h-full min-h-[100px] bg-transparent outline-none resize-none font-medium text-gray-800 mt-2" defaultValue={note.text} onBlur={(e) => db.collection("notes").doc(note.id).update({ text: e.target.value })} />
+                            <textarea className="w-full h-full min-h-[100px] bg-transparent outline-none resize-none font-medium text-gray-800 mt-2 menu-scroll" defaultValue={note.text} onBlur={(e) => db.collection("notes").doc(note.id).update({ text: e.target.value })} onPointerDown={e => e.stopPropagation()} />
+                        
+                        ) : note.type === 'todo' ? (
+                            <div className="flex flex-col w-full mt-2" onPointerDown={e => e.stopPropagation()}>
+                                <input type="text" className="font-bold text-sm outline-none mb-3 bg-transparent border-b border-gray-200 pb-1" placeholder="Tajuk To-Do..." defaultValue={note.text} onBlur={e => db.collection("notes").doc(note.id).update({ text: e.target.value })} />
+                                <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto menu-scroll">
+                                    {(note.tasks || []).map((task, idx) => (
+                                        <div key={idx} className="flex items-start gap-2 group">
+                                            <input type="checkbox" className="mt-1.5 cursor-pointer w-4 h-4 accent-green-500 shrink-0" checked={task.done} onChange={e => {
+                                                const newTasks = [...(note.tasks || [])];
+                                                newTasks[idx].done = e.target.checked;
+                                                db.collection("notes").doc(note.id).update({ tasks: newTasks });
+                                            }} />
+                                            {/* 🌟 FIX BUGS: Default 3 Line & Logik Enter/Shift+Enter */}
+                                            <textarea 
+                                                className={`flex-1 outline-none resize-none bg-transparent text-sm max-h-[72px] overflow-y-auto menu-scroll ${task.done ? 'line-through text-gray-400' : 'text-gray-700'}`} 
+                                                rows="3" 
+                                                defaultValue={task.text} 
+                                                placeholder="Tulis task..." 
+                                                onBlur={e => {
+                                                    const newTasks = [...(note.tasks || [])];
+                                                    newTasks[idx].text = e.target.value;
+                                                    db.collection("notes").doc(note.id).update({ tasks: newTasks });
+                                                }}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                                        e.preventDefault(); // Halang buat baris baru
+                                                        const newTasks = [...(note.tasks || [])];
+                                                        newTasks[idx].text = e.target.value; // Save teks sebelum tambah task
+                                                        newTasks.push({ text: '', done: false });
+                                                        db.collection("notes").doc(note.id).update({ tasks: newTasks });
+                                                    }
+                                                }}
+                                            ></textarea>
+                                            <button onClick={() => {
+                                                const newTasks = (note.tasks || []).filter((_, i) => i !== idx);
+                                                db.collection("notes").doc(note.id).update({ tasks: newTasks });
+                                            }} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity p-1">✕</button>
+                                        </div>
+                                    ))}
+                                    <button onClick={() => {
+                                        const newTasks = [...(note.tasks || []), { text: '', done: false }];
+                                        db.collection("notes").doc(note.id).update({ tasks: newTasks });
+                                    }} className="text-xs text-blue-600 font-bold bg-blue-50 py-1.5 rounded-lg mt-1 hover:bg-blue-100 transition self-start px-3 shadow-sm">+ Tambah Task</button>
+                                </div>
+                            </div>
                         ) : (
                             <div className="flex flex-col gap-2 mt-1">
                                 {(note.imageUrl === 'threads-embed' || note.imageUrl === 'instagram-embed') ? (
-                                    /* 🌟 IFRAME KEBAL: Mesti tambah /embed/ di hujung */
                                     <div key={note.url} className="rounded-xl overflow-hidden bg-white border border-gray-200 shadow-inner" onPointerDown={e => e.stopPropagation()}>
-                                        <iframe 
-                                            src={`${note.url}/embed/`} 
-                                            className="w-full min-h-[450px] border-none block" 
-                                            scrolling="no"
-                                            frameBorder="0"
-                                            allowTransparency="true"
-                                            allow="encrypted-media"
-                                        ></iframe>
+                                        <iframe src={`${note.url}/embed/`} className="w-full min-h-[450px] border-none block" scrolling="no" frameBorder="0" allowtransparency="true" allow="encrypted-media"></iframe>
                                     </div>
                                 ) : note.imageUrl ? (
                                     <div className="rounded-lg overflow-hidden border border-gray-100 bg-white">
@@ -301,9 +309,16 @@
                                     </div>
                                 ) : null}
 
-                                {/* INPUT URL */}
-                                <div className="flex flex-col gap-1 px-1" onPointerDown={e => e.stopPropagation()}>
-                                    <input type="url" className="w-full text-[10px] p-1.5 border border-blue-100 rounded bg-white shadow-sm" placeholder="Paste link..." defaultValue={note.url} onBlur={handleUrlSave} />
+                                <div className="flex flex-col gap-2 mt-2 px-1" onPointerDown={e => e.stopPropagation()}>
+                                    <input type="url" className="w-full text-[10px] p-2 border border-blue-100 rounded bg-gray-50 shadow-inner outline-none focus:border-blue-300" placeholder="Paste link..." defaultValue={note.url} onBlur={handleUrlSave} />
+                                    {/* 🌟 FIX BUGS: Default 10 Line */}
+                                    <textarea 
+                                        className="w-full text-xs font-medium bg-transparent outline-none resize-none text-gray-700 placeholder-gray-400 max-h-[240px] overflow-y-auto menu-scroll" 
+                                        placeholder="Tambah nota / tajuk untuk link ini..." 
+                                        defaultValue={note.text} 
+                                        onBlur={(e) => db.collection("notes").doc(note.id).update({ text: e.target.value })} 
+                                        rows="10" 
+                                    ></textarea>
                                 </div>
                             </div>
                         )}
