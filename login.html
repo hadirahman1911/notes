@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notes - Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+</head>
+<body class="bg-gray-100 h-screen flex items-center justify-center font-sans">
+
+    <div class="bg-white p-8 rounded-2xl shadow-xl w-80 text-center border border-gray-200">
+        <div class="mb-6">
+            <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span class="text-2xl">🔒</span>
+            </div>
+            <h1 class="text-xl font-bold text-gray-800">Identity Lock</h1>
+            <p class="text-gray-400 text-xs mt-1">Sila masukkan PIN</p>
+        </div>
+
+        <div class="flex flex-col gap-4">
+            <input 
+                type="password" 
+                id="pinInput" 
+                maxLength="4" 
+                inputmode="numeric"
+                placeholder="*****" 
+                class="w-full text-center text-3xl tracking-[1em] font-bold p-3 border-2 border-gray-100 rounded-xl focus:border-blue-400 outline-none transition-all"
+            >
+            <button 
+                id="loginBtn"
+                onclick="checkPin()" 
+                class="w-full bg-black text-white font-bold py-3 rounded-xl hover:bg-gray-800 transition-all active:scale-95 disabled:bg-gray-400"
+            >
+                Masuk
+            </button>
+            <p id="errorMsg" class="text-red-500 text-xs hidden italic">PIN Salah. Cuba lagi boss!</p>
+        </div>
+    </div>
+
+    <script>
+        // Config Firebase kau yang asal
+        const firebaseConfig = {
+            apiKey: "AIzaSyDxJWz15biwT7k3YsupIghBVBPtICNNkfo",
+            authDomain: "notes-tracker-8e97d.firebaseapp.com",
+            projectId: "notes-tracker-8e97d",
+            storageBucket: "notes-tracker-8e97d.firebasestorage.app",
+            messagingSenderId: "480733039726",
+            appId: "1:480733039726:web:9b051f3b15cf735aac6a7f"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        async function checkPin() {
+            const input = document.getElementById('pinInput').value;
+            const error = document.getElementById('errorMsg');
+            const button = document.getElementById('loginBtn');
+
+            button.innerText = "Menyemak...";
+            button.disabled = true;
+
+            try {
+                // SEDUT PIN DARI FIREBASE SAHAJA
+                const querySnapshot = await db.collection("system_security").get();
+                let serverPin = null;
+
+                querySnapshot.forEach((doc) => {
+                    if (doc.data().PIN) {
+                        serverPin = doc.data().PIN.toString();
+                    }
+                });
+
+                // 🌟 STRICT MODE: Kalau Firebase takde PIN, anggap sistem error. Takde hardcode!
+                if (!serverPin) {
+                    console.error("Amaran: Tiada PIN dijumpai dalam database!");
+                    throw new Error("Sistem Keselamatan Tergendala");
+                }
+
+                // BANDINGKAN PIN (Hanya bergantung pada serverPin)
+                if (input === serverPin) {
+                    localStorage.setItem('isLoggedIn', 'true');
+                    localStorage.setItem('loginTime', Date.now());
+                    window.location.href = "index.html";
+                } else {
+                    throw new Error("PIN Salah");
+                }
+
+            } catch (err) {
+                // Tunjuk ralat biasa pada pengguna
+                error.classList.remove('hidden');
+                document.getElementById('pinInput').value = "";
+                setTimeout(() => error.classList.add('hidden'), 2000);
+            } finally {
+                button.innerText = "Masuk";
+                button.disabled = false;
+            }
+        }
+
+        // Tekan Enter terus masuk
+        document.getElementById('pinInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') checkPin();
+        });
+    </script>
+</body>
+</html>
